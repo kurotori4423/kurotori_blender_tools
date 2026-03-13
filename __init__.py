@@ -1,7 +1,15 @@
 """Kurotori Blender Tools アドオンのエントリーポイント。"""
 
+from typing import Any
+
 import bpy
 
+from .bone_align_logic import (
+    BoneAlignmentError,
+    build_aligned_segments,
+    order_selected_bone_chain,
+    project_bone_chain_joints_to_line,
+)
 from .bone_rename_logic import collect_linear_chain, format_bone_name
 
 bl_info = {
@@ -87,6 +95,19 @@ if hasattr(bpy, "types"):
         return active_object, armature_data, active_bone
 
 
+    def _get_selected_edit_bones(armature_data: bpy.types.Armature) -> list[bpy.types.EditBone]:
+        """Edit Mode で選択されているボーンだけを取得する。"""
+
+        # Blender の選択状態を都度読み直し、アクティブ依存の暗黙挙動を避ける。
+        return [bone for bone in armature_data.edit_bones if bone.select]
+
+
+    def _vector_to_tuple(vector: Any) -> tuple[float, float, float]:
+        """Blender のベクトル互換値を純粋ロジック向けのタプルへ変換する。"""
+
+        return (float(vector[0]), float(vector[1]), float(vector[2]))
+
+
     class KUROTORI_OT_show_message(bpy.types.Operator):
         """アドオンの読み込み確認用メッセージを表示する。"""
 
@@ -148,6 +169,51 @@ if hasattr(bpy, "types"):
             return {"FINISHED"}
 
 
+    class KUROTORI_OT_align_bone_chain_linear(bpy.types.Operator):
+        """選択ボーンチェーンを根元 Head と末端 Tail の直線上へ整列する。"""
+
+        bl_idname = "kurotori_tools.align_bone_chain_linear"
+        bl_label = "Align Bone Chain"
+        bl_description = "選択したボーンチェーンを始点と終点の直線上へ整列します"
+        bl_options = {"REGISTER", "UNDO"}
+
+        def execute(self, context: bpy.types.Context) -> set[str]:
+            """選択チェーンを検証し、各関節を基準直線へ射影して再配置する。"""
+
+            active_object, armature_data, _active_bone = _validate_bone_rename_context(context)
+            if active_object is None:
+                self.report({"ERROR"}, "アクティブオブジェクトが見つかりません。")
+                return {"CANCELLED"}
+
+            if armature_data is None:
+                self.report({"ERROR"}, "Armature の Edit Mode で実行してください。")
+                return {"CANCELLED"}
+
+            selected_bones = _get_selected_edit_bones(armature_data)
+
+            try:
+                ordered_chain = order_selected_bone_chain(
+                    selected_bones,
+                    lambda bone: bone.parent,
+                    lambda bone: tuple(bone.children),
+                )
+                joint_positions = [_vector_to_tuple(ordered_chain[0].head)]
+                joint_positions.extend(_vector_to_tuple(bone.tail) for bone in ordered_chain)
+                aligned_segments = build_aligned_segments(
+                    project_bone_chain_joints_to_line(joint_positions)
+                )
+            except BoneAlignmentError as error:
+                self.report({"ERROR"}, str(error))
+                return {"CANCELLED"}
+
+            for bone, (new_head, new_tail) in zip(ordered_chain, aligned_segments, strict=True):
+                bone.head = new_head
+                bone.tail = new_tail
+
+            self.report({"INFO"}, f"{len(ordered_chain)} 本のボーンを整列しました。")
+            return {"FINISHED"}
+
+
     class KUROTORI_PT_main_panel(bpy.types.Panel):
         """アドオンの主要 UI を 3D View に表示する。"""
 
@@ -180,11 +246,20 @@ if hasattr(bpy, "types"):
             box.prop(settings, "side")
             box.operator(KUROTORI_OT_rename_bone_chain.bl_idname, icon="GREASEPENCIL")
 
+            align_box = layout.box()
+            align_box.label(text="Bone Align Chain", icon="CON_TRACKTO")
+            align_box.label(text="選択した単一路線のボーンを直線へ整列します。")
+            align_box.operator(
+                KUROTORI_OT_align_bone_chain_linear.bl_idname,
+                icon="DRIVER_DISTANCE",
+            )
+
 
     CLASSES = (
         KUROTORI_PG_bone_rename_settings,
         KUROTORI_OT_show_message,
         KUROTORI_OT_rename_bone_chain,
+        KUROTORI_OT_align_bone_chain_linear,
         KUROTORI_PT_main_panel,
     )
 

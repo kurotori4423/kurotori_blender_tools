@@ -10,6 +10,7 @@ blender-scripts/
 └─ addons/
    └─ kurotori_blender_tools/
       ├─ __init__.py
+      ├─ bone_align_logic.py
       ├─ bone_rename_logic.py
       ├─ tests/
       ├─ README.md
@@ -28,6 +29,10 @@ blender-scripts/
   - 概要: Edit Mode のアクティブボーンから子方向へ直線チェーンをたどり、`[部位名]_[インデックス]_[L/R]` 形式で連番リネームします。
   - 使用方法: Armature を Edit Mode にし、開始ボーンをアクティブにしてから `部位名`、`開始番号`、`左右` を設定して実行します。
   - 制約や注意点: 子ボーンが複数ある分岐点に達したら、その分岐元ボーンまでリネームして停止します。左右を `なし` にした場合は末尾の `_L/_R` を付けません。
+- ボーン整列
+  - 概要: Edit Mode で選択した単一路線のボーンチェーンを、根元ボーンの Head と末端ボーンの Tail を結ぶ直線上へ整列します。
+  - 使用方法: Armature を Edit Mode にし、整列したいボーンを親子で連続選択して `Align Bone Chain` を実行します。
+  - 制約や注意点: 各関節位置を基準直線へ射影するため、各ボーン長は変化する場合があります。分岐を含む選択や複数の独立チェーンは対象外です。
 
 ## 使用方法
 
@@ -38,6 +43,7 @@ blender-scripts/
 5. 3D View のサイドバーで `Kurotori` タブを開きます。
 6. ボーン連番リネームを使う場合は、Armature を Edit Mode にし、開始したいボーンをアクティブにします。
 7. `部位名`、`開始番号`、`左右` を設定して `Rename Bone Chain` を実行します。
+8. ボーン整列を使う場合は、Armature を Edit Mode にし、親子で 1 本につながったボーン群を選択して `Align Bone Chain` を実行します。
 
 ## 開発環境セットアップ
 
