@@ -18,8 +18,9 @@
 ## Python 環境
 
 - 開発用 Python 環境は `uv venv` を前提にします。
+- 依存の再現は `pyproject.toml` と `uv.lock` を正とし、手動導入だけに依存しないでください。
 - Blender 外での補完や静的解析には `fake-bpy-module` の利用を推奨します。
-- 依存固定は初期段階では行わず、将来必要になった時点で `uv + pyproject optional-dependencies` を導入します。
+- CLI ツールの実行は、原則として `uv run` 経由で仮想環境を明示してください。
 
 ## コーディング規約
 

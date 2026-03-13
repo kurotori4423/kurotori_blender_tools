@@ -1,0 +1,31 @@
+[project]
+name = "kurotori-blender-tools"
+version = "0.1.0"
+description = "個人用 Blender アドオンの開発環境定義"
+requires-python = ">=3.12,<3.13"
+dependencies = []
+
+[project.optional-dependencies]
+# Blender 外での補完、静的解析、テストを再現できる最小構成を定義する。
+dev = [
+    "basedpyright==1.38.2",
+    "fake-bpy-module-4-5==20260128",
+    "pytest==9.0.2",
+    "ruff==0.15.6",
+]
+
+[tool.uv]
+# このリポジトリは Python パッケージ配布ではなく、開発環境再現を主目的とする。
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.basedpyright]
+typeCheckingMode = "basic"
+pythonVersion = "3.12"
+reportMissingModuleSource = false

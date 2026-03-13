@@ -35,27 +35,35 @@ blender-scripts/
 
 ## 開発環境セットアップ
 
-このリポジトリでは、Blender 本体とは別に `uv venv` を使った Python 仮想環境を用意して、補完や静的解析を行う想定です。
+このリポジトリでは、Blender 本体とは別に `uv venv` を使った Python 仮想環境を用意して、補完や静的解析を行います。  
+依存は `pyproject.toml` と `uv.lock` で管理します。
 
 ```powershell
 cd D:\Apps\blender-scripts\addons\kurotori_blender_tools
-uv venv
+uv sync --extra dev
 .\.venv\Scripts\Activate.ps1
-uv pip install fake-bpy-module-latest ruff basedpyright pytest
 ```
 
-`fake-bpy-module` は Blender 外でのエディタ補完や型補助のために使います。  
-初回は `pyproject.toml` を置かず、必要な依存は上記のように仮想環境へ導入する運用にします。将来的に依存を固定化する段階で、`uv + pyproject optional-dependencies` に移行する想定です。
+`uv sync --extra dev` により、`.venv` の作成と開発依存の導入をまとめて再現できます。  
+`fake-bpy-module` は Blender 外での補完や型補助のために使い、`ruff`、`basedpyright`、`pytest` は CLI ツールとして利用します。
 
-## あると便利なツール
+### よく使うコマンド
 
-- `uv`: 仮想環境作成と依存導入の入口
+```powershell
+uv run ruff check .
+uv run basedpyright
+uv run pytest
+```
+
+## 導入済みの開発ツール
+
+- `uv`: 仮想環境作成、依存同期、CLI 実行の入口
 - `fake-bpy-module`: Blender API の補完と静的解析補助
 - `ruff`: lint / format
-- `basedpyright` または `pyright`: 型チェック補助
+- `basedpyright`: 型チェック補助
 - `pytest`: Blender 非依存ロジックのテスト
-- `VS Code` または `PyCharm`: 編集、補完、デバッグ
-- `just` または `Taskfile`: 開発コマンドの定型化
+
+必要に応じて、将来的に `just` や `Taskfile` のようなコマンド定型化ツールを追加できます。
 
 ## 今後の方針
 
