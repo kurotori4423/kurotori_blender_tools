@@ -1,5 +1,7 @@
 """Kurotori Blender Tools アドオンのエントリーポイント。"""
 
+import bpy
+
 bl_info = {
     "name": "Kurotori Blender Tools",
     "author": "kurotori",
@@ -13,13 +15,55 @@ bl_info = {
 }
 
 
+class KUROTORI_OT_show_message(bpy.types.Operator):
+    """アドオンの読み込み確認用メッセージを表示する。"""
+
+    bl_idname = "kurotori_tools.show_message"
+    bl_label = "Show Message"
+    bl_description = "アドオンが有効化されていることを確認します"
+
+    def execute(self, context: bpy.types.Context) -> set[str]:
+        """オペレーター実行時に Blender のステータスへ通知する。"""
+        # 初期段階では最小の動作確認を優先し、依存の少ないレポート表示だけを行う。
+        self.report({"INFO"}, "Kurotori Blender Tools is ready.")
+        return {"FINISHED"}
+
+
+class KUROTORI_PT_main_panel(bpy.types.Panel):
+    """アドオンの最小 UI を 3D View に表示する。"""
+
+    bl_label = "Kurotori Tools"
+    bl_idname = "KUROTORI_PT_main_panel"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "Kurotori"
+
+    def draw(self, context: bpy.types.Context) -> None:
+        """有効化確認用のボタンを描画する。"""
+        # 今後の機能追加先を明確にするため、最初から専用タブを確保しておく。
+        layout = self.layout
+        if layout is None:
+            return
+
+        layout.label(text="Addon loaded")
+        layout.operator(KUROTORI_OT_show_message.bl_idname, icon="INFO")
+
+
+CLASSES = (
+    KUROTORI_OT_show_message,
+    KUROTORI_PT_main_panel,
+)
+
+
 def register() -> None:
     """アドオンを Blender に登録する。"""
-    # 初期段階では登録対象クラスを持たず、将来の機能追加時にここへ登録処理を集約する。
-    return None
+    # Blender の登録順序を固定し、将来ファイル分割しても追従しやすい構造を先に作る。
+    for cls in CLASSES:
+        bpy.utils.register_class(cls)
 
 
 def unregister() -> None:
     """アドオンを Blender から解除する。"""
-    # register() と対になる解除処理の置き場所を先に固定し、拡張時の実装位置を明確にする。
-    return None
+    # Blender の解除順序は登録と逆順にして、依存が増えた時の事故を避ける。
+    for cls in reversed(CLASSES):
+        bpy.utils.unregister_class(cls)
