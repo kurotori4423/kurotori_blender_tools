@@ -102,16 +102,16 @@ if hasattr(bpy, "types"):
     def _source_shape_key_items(
         self: Any, context: bpy.types.Context | None
     ) -> list[tuple[str, str, str]]:
-        """戻し元 A の選択肢を返す。"""
+        """Source の選択肢を返す。"""
 
-        # A は変形済み状態を表すため、基準形状である Basis は候補から外す。
+        # Source は変形済み状態を表すため、基準形状である Basis は候補から外す。
         return _get_shape_key_items(context, include_basis=False)
 
 
     def _target_shape_key_items(
         self: Any, context: bpy.types.Context | None
     ) -> list[tuple[str, str, str]]:
-        """戻し先 B の選択肢を返す。"""
+        """Target の選択肢を返す。"""
 
         return _get_shape_key_items(context, include_basis=True)
 
@@ -149,18 +149,18 @@ if hasattr(bpy, "types"):
 
         # 対象はアクティブ Mesh によって変わるため、EnumProperty は描画時に候補を作る。
         source_shape_key: bpy.props.EnumProperty(  # type: ignore[valid-type]
-            name="シェイプキー A",
-            description="戻し元になる変形シェイプキー",
+            name="Source Shape Key",
+            description="Source になるシェイプキー。Basis は選択できません",
             items=_source_shape_key_items,
         )
         target_shape_key: bpy.props.EnumProperty(  # type: ignore[valid-type]
-            name="シェイプキー B",
-            description="戻し先になるシェイプキー。Basis も選択できます",
+            name="Target Shape Key",
+            description="Target になるシェイプキー。Basis も選択できます",
             items=_target_shape_key_items,
         )
         result_shape_key_name: bpy.props.StringProperty(  # type: ignore[valid-type]
-            name="シェイプキー C",
-            description="作成する逆シェイプキー名",
+            name="Destination Shape Key",
+            description="新規作成する Destination の名前",
             default="Reverse",
         )
 
@@ -377,15 +377,15 @@ if hasattr(bpy, "types"):
 
 
     class KUROTORI_OT_create_reverse_shape_key(bpy.types.Operator):
-        """A から B へ戻すための相対シェイプキー C を新規作成する。"""
+        """Source から Target へ戻すための Destination を新規作成する。"""
 
         bl_idname = "kurotori_tools.create_reverse_shape_key"
         bl_label = "Create Reverse Shape Key"
-        bl_description = "シェイプキー A から B へ変化する相対シェイプキーを作成します"
+        bl_description = "Source から Target へ変化する Destination Shape Key を作成します"
         bl_options = {"REGISTER", "UNDO"}
 
         def execute(self, context: bpy.types.Context) -> set[str]:
-            """選択された A/B の関係から新規シェイプキー C を作成する。"""
+            """選択された Source/Target の関係から Destination を作成する。"""
 
             settings = _get_shape_key_reverse_settings(context)
             if settings is None:
@@ -404,7 +404,7 @@ if hasattr(bpy, "types"):
             source_key = shape_keys.key_blocks.get(settings.source_shape_key)
             target_key = shape_keys.key_blocks.get(settings.target_shape_key)
             if source_key is None or target_key is None:
-                self.report({"ERROR"}, "シェイプキー A または B を選択してください。")
+                self.report({"ERROR"}, "Source または Target を選択してください。")
                 return {"CANCELLED"}
 
             result_name = settings.result_shape_key_name.strip()
@@ -479,6 +479,8 @@ if hasattr(bpy, "types"):
 
             shape_key_box = layout.box()
             shape_key_box.label(text="Reverse Shape Key", icon="SHAPEKEY_DATA")
+            shape_key_box.label(text="Source から Target へ変化する Destination を作成します。")
+            shape_key_box.label(text="Target には Basis も選択できます。")
             if shape_key_reverse_settings is None:
                 shape_key_box.label(text="設定を読み込めませんでした。", icon="ERROR")
                 return

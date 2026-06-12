@@ -15,7 +15,7 @@ from shape_key_reverse_logic import (  # noqa: E402
 
 
 def test_validate_reverse_shape_key_inputs_rejects_same_shape_key() -> None:
-    """A と B が同じシェイプキーの場合は差分作成を拒否する。"""
+    """Source と Target が同じシェイプキーの場合は差分作成を拒否する。"""
 
     with pytest.raises(ShapeKeyReverseError):
         validate_reverse_shape_key_inputs("Smile", "Smile", "Smile_Reset", 3, 3)
@@ -36,14 +36,14 @@ def test_validate_reverse_shape_key_inputs_rejects_zero_vertices() -> None:
 
 
 def test_validate_reverse_shape_key_inputs_rejects_mismatched_vertex_count() -> None:
-    """A と B の頂点数が違う場合は座標コピーを拒否する。"""
+    """Source と Target の頂点数が違う場合は座標コピーを拒否する。"""
 
     with pytest.raises(ShapeKeyReverseError):
         validate_reverse_shape_key_inputs("Smile", "Basis", "Smile_Reset", 3, 2)
 
 
 def test_build_reverse_shape_key_coordinates_uses_target_shape_key_coordinates() -> None:
-    """通常シェイプキー B の座標を C の座標として使う。"""
+    """通常 Target の座標を Destination の座標として使う。"""
 
     target_coordinates = [(0.0, 0.0, 0.0), (1.0, 2.0, 3.0)]
 
@@ -51,7 +51,7 @@ def test_build_reverse_shape_key_coordinates_uses_target_shape_key_coordinates()
 
 
 def test_build_reverse_shape_key_coordinates_uses_basis_coordinates() -> None:
-    """Basis を B にした場合も、その座標を C の座標として使う。"""
+    """Basis を Target にした場合も、その座標を Destination の座標として使う。"""
 
     basis_coordinates = [(-1.0, 0.0, 1.0), (2.0, 0.5, -0.5)]
 
