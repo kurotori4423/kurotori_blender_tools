@@ -12,6 +12,7 @@ blender-scripts/
       ├─ __init__.py
       ├─ bone_align_logic.py
       ├─ bone_rename_logic.py
+      ├─ shape_key_reverse_logic.py
       ├─ tests/
       ├─ README.md
       └─ AGENTS.md
@@ -33,6 +34,10 @@ blender-scripts/
   - 概要: Edit Mode で選択した単一路線のボーンチェーンを、根元ボーンの Head と末端ボーンの Tail を結ぶ直線上へ整列します。
   - 使用方法: Armature を Edit Mode にし、整列したいボーンを親子で連続選択して `Align Bone Chain` を実行します。
   - 制約や注意点: 各関節位置を基準直線へ射影するため、各ボーン長は変化する場合があります。分岐を含む選択や複数の独立チェーンは対象外です。
+- 逆シェイプキー変換
+  - 概要: シェイプキー A を相対基準にして、A からシェイプキー B へ変化する新規シェイプキー C を作成します。
+  - 使用方法: Mesh オブジェクトを選択し、`シェイプキー A`、`シェイプキー B`、`シェイプキー C` を設定して `Create Reverse Shape Key` を実行します。
+  - 制約や注意点: A には Basis 以外のシェイプキーを選択します。B には Basis も選択できるため、A から Basis に戻すシェイプキーも作成できます。同名の C が存在する場合は Blender の自動命名で別名作成されます。
 
 ## 使用方法
 
@@ -44,6 +49,7 @@ blender-scripts/
 6. ボーン連番リネームを使う場合は、Armature を Edit Mode にし、開始したいボーンをアクティブにします。
 7. `部位名`、`開始番号`、`左右` を設定して `Rename Bone Chain` を実行します。
 8. ボーン整列を使う場合は、Armature を Edit Mode にし、親子で 1 本につながったボーン群を選択して `Align Bone Chain` を実行します。
+9. 逆シェイプキー変換を使う場合は、Mesh オブジェクトを選択し、A/B/C を設定して `Create Reverse Shape Key` を実行します。
 
 ## 開発環境セットアップ
 

@@ -11,6 +11,11 @@ from .bone_align_logic import (
     project_bone_chain_joints_to_line,
 )
 from .bone_rename_logic import collect_linear_chain, format_bone_name
+from .shape_key_reverse_logic import (
+    ShapeKeyReverseError,
+    build_reverse_shape_key_coordinates,
+    validate_reverse_shape_key_inputs,
+)
 
 bl_info = {
     "name": "Kurotori Blender Tools",
@@ -26,6 +31,89 @@ bl_info = {
 
 
 if hasattr(bpy, "types"):
+    _SHAPE_KEY_SOURCE_ITEMS: list[tuple[str, str, str]] = []
+    _SHAPE_KEY_TARGET_ITEMS: list[tuple[str, str, str]] = []
+
+    def _empty_shape_key_items() -> list[tuple[str, str, str]]:
+        """EnumProperty が空にならないよう、未選択用の項目を返す。"""
+
+        return [("", "未選択", "対象メッシュのシェイプキーを選択してください")]
+
+
+    def _get_shape_key_items(
+        context: bpy.types.Context | None, *, include_basis: bool
+    ) -> list[tuple[str, str, str]]:
+        """アクティブ Mesh のシェイプキーを UI 選択肢へ変換する。"""
+
+        global _SHAPE_KEY_SOURCE_ITEMS, _SHAPE_KEY_TARGET_ITEMS
+
+        if context is None:
+            items = _empty_shape_key_items()
+            if include_basis:
+                _SHAPE_KEY_TARGET_ITEMS = items
+                return _SHAPE_KEY_TARGET_ITEMS
+            _SHAPE_KEY_SOURCE_ITEMS = items
+            return _SHAPE_KEY_SOURCE_ITEMS
+
+        active_object = context.active_object
+        if active_object is None or active_object.type != "MESH":
+            items = _empty_shape_key_items()
+            if include_basis:
+                _SHAPE_KEY_TARGET_ITEMS = items
+                return _SHAPE_KEY_TARGET_ITEMS
+            _SHAPE_KEY_SOURCE_ITEMS = items
+            return _SHAPE_KEY_SOURCE_ITEMS
+
+        mesh_data = active_object.data
+        if not isinstance(mesh_data, bpy.types.Mesh):
+            items = _empty_shape_key_items()
+            if include_basis:
+                _SHAPE_KEY_TARGET_ITEMS = items
+                return _SHAPE_KEY_TARGET_ITEMS
+            _SHAPE_KEY_SOURCE_ITEMS = items
+            return _SHAPE_KEY_SOURCE_ITEMS
+
+        shape_keys = mesh_data.shape_keys
+        if shape_keys is None:
+            items = _empty_shape_key_items()
+            if include_basis:
+                _SHAPE_KEY_TARGET_ITEMS = items
+                return _SHAPE_KEY_TARGET_ITEMS
+            _SHAPE_KEY_SOURCE_ITEMS = items
+            return _SHAPE_KEY_SOURCE_ITEMS
+
+        reference_key = shape_keys.reference_key
+        items: list[tuple[str, str, str]] = []
+        for key_block in shape_keys.key_blocks:
+            if not include_basis and key_block == reference_key:
+                continue
+            items.append((key_block.name, key_block.name, ""))
+
+        # Blender の動的 EnumProperty は返却した文字列参照を保持しないことがある。
+        # 日本語名の表示崩れを避けるため、項目リストをモジュール内に保持して返す。
+        if include_basis:
+            _SHAPE_KEY_TARGET_ITEMS = items or _empty_shape_key_items()
+            return _SHAPE_KEY_TARGET_ITEMS
+
+        _SHAPE_KEY_SOURCE_ITEMS = items or _empty_shape_key_items()
+        return _SHAPE_KEY_SOURCE_ITEMS
+
+
+    def _source_shape_key_items(
+        self: Any, context: bpy.types.Context | None
+    ) -> list[tuple[str, str, str]]:
+        """戻し元 A の選択肢を返す。"""
+
+        # A は変形済み状態を表すため、基準形状である Basis は候補から外す。
+        return _get_shape_key_items(context, include_basis=False)
+
+
+    def _target_shape_key_items(
+        self: Any, context: bpy.types.Context | None
+    ) -> list[tuple[str, str, str]]:
+        """戻し先 B の選択肢を返す。"""
+
+        return _get_shape_key_items(context, include_basis=True)
 
     class KUROTORI_PG_bone_rename_settings(bpy.types.PropertyGroup):
         """ボーン連番リネームの UI 設定を保持する。"""
@@ -56,6 +144,27 @@ if hasattr(bpy, "types"):
         )
 
 
+    class KUROTORI_PG_shape_key_reverse_settings(bpy.types.PropertyGroup):
+        """逆シェイプキー変換の UI 設定を保持する。"""
+
+        # 対象はアクティブ Mesh によって変わるため、EnumProperty は描画時に候補を作る。
+        source_shape_key: bpy.props.EnumProperty(  # type: ignore[valid-type]
+            name="シェイプキー A",
+            description="戻し元になる変形シェイプキー",
+            items=_source_shape_key_items,
+        )
+        target_shape_key: bpy.props.EnumProperty(  # type: ignore[valid-type]
+            name="シェイプキー B",
+            description="戻し先になるシェイプキー。Basis も選択できます",
+            items=_target_shape_key_items,
+        )
+        result_shape_key_name: bpy.props.StringProperty(  # type: ignore[valid-type]
+            name="シェイプキー C",
+            description="作成する逆シェイプキー名",
+            default="Reverse",
+        )
+
+
     def _get_bone_rename_settings(
         context: bpy.types.Context,
     ) -> KUROTORI_PG_bone_rename_settings | None:
@@ -67,6 +176,22 @@ if hasattr(bpy, "types"):
 
         settings = getattr(window_manager, "kurotori_bone_rename_settings", None)
         if settings is None or not isinstance(settings, KUROTORI_PG_bone_rename_settings):
+            return None
+
+        return settings
+
+
+    def _get_shape_key_reverse_settings(
+        context: bpy.types.Context,
+    ) -> KUROTORI_PG_shape_key_reverse_settings | None:
+        """WindowManager に登録した逆シェイプキー設定を安全に取得する。"""
+
+        window_manager = context.window_manager
+        if window_manager is None:
+            return None
+
+        settings = getattr(window_manager, "kurotori_shape_key_reverse_settings", None)
+        if settings is None or not isinstance(settings, KUROTORI_PG_shape_key_reverse_settings):
             return None
 
         return settings
@@ -106,6 +231,43 @@ if hasattr(bpy, "types"):
         """Blender のベクトル互換値を純粋ロジック向けのタプルへ変換する。"""
 
         return (float(vector[0]), float(vector[1]), float(vector[2]))
+
+
+    def _get_active_mesh_shape_keys(
+        context: bpy.types.Context,
+    ) -> tuple[bpy.types.Object | None, bpy.types.Mesh | None, bpy.types.Key | None]:
+        """逆シェイプキー作成に必要な Mesh と ShapeKeys を取得する。"""
+
+        active_object = context.active_object
+        if active_object is None:
+            return None, None, None
+
+        if active_object.type != "MESH":
+            return active_object, None, None
+
+        mesh_data = active_object.data
+        if not isinstance(mesh_data, bpy.types.Mesh):
+            return active_object, None, None
+
+        shape_keys = mesh_data.shape_keys
+        if shape_keys is None:
+            return active_object, mesh_data, None
+
+        return active_object, mesh_data, shape_keys
+
+
+    def _shape_key_coordinates(
+        key_block: bpy.types.ShapeKey,
+    ) -> list[tuple[float, float, float]]:
+        """Blender のシェイプキー座標を純粋ロジック向けのタプル列へ変換する。"""
+
+        coordinates: list[tuple[float, float, float]] = []
+        for point in key_block.data:
+            # fake-bpy-module では ShapeKeyPoint の co 型が解決されないため、境界で Any に寄せる。
+            shape_key_point: Any = point
+            coordinates.append(_vector_to_tuple(shape_key_point.co))
+
+        return coordinates
 
 
     class KUROTORI_OT_show_message(bpy.types.Operator):
@@ -214,6 +376,66 @@ if hasattr(bpy, "types"):
             return {"FINISHED"}
 
 
+    class KUROTORI_OT_create_reverse_shape_key(bpy.types.Operator):
+        """A から B へ戻すための相対シェイプキー C を新規作成する。"""
+
+        bl_idname = "kurotori_tools.create_reverse_shape_key"
+        bl_label = "Create Reverse Shape Key"
+        bl_description = "シェイプキー A から B へ変化する相対シェイプキーを作成します"
+        bl_options = {"REGISTER", "UNDO"}
+
+        def execute(self, context: bpy.types.Context) -> set[str]:
+            """選択された A/B の関係から新規シェイプキー C を作成する。"""
+
+            settings = _get_shape_key_reverse_settings(context)
+            if settings is None:
+                self.report({"ERROR"}, "逆シェイプキー設定を取得できませんでした。")
+                return {"CANCELLED"}
+
+            active_object, _mesh_data, shape_keys = _get_active_mesh_shape_keys(context)
+            if active_object is None:
+                self.report({"ERROR"}, "アクティブオブジェクトが見つかりません。")
+                return {"CANCELLED"}
+
+            if shape_keys is None:
+                self.report({"ERROR"}, "シェイプキーを持つ Mesh オブジェクトを選択してください。")
+                return {"CANCELLED"}
+
+            source_key = shape_keys.key_blocks.get(settings.source_shape_key)
+            target_key = shape_keys.key_blocks.get(settings.target_shape_key)
+            if source_key is None or target_key is None:
+                self.report({"ERROR"}, "シェイプキー A または B を選択してください。")
+                return {"CANCELLED"}
+
+            result_name = settings.result_shape_key_name.strip()
+            try:
+                validate_reverse_shape_key_inputs(
+                    source_key.name,
+                    target_key.name,
+                    result_name,
+                    len(source_key.data),
+                    len(target_key.data),
+                )
+                reverse_coordinates = build_reverse_shape_key_coordinates(
+                    _shape_key_coordinates(target_key)
+                )
+            except ShapeKeyReverseError as error:
+                self.report({"ERROR"}, str(error))
+                return {"CANCELLED"}
+
+            new_shape_key = active_object.shape_key_add(name=result_name, from_mix=False)
+            new_shape_key.relative_key = source_key
+            for point, coordinate in zip(new_shape_key.data, reverse_coordinates, strict=True):
+                # fake-bpy-module では co 型が解決されないため、境界で Any に寄せる。
+                shape_key_point: Any = point
+                shape_key_point.co = coordinate
+
+            active_object.active_shape_key_index = shape_keys.key_blocks.find(new_shape_key.name)
+
+            self.report({"INFO"}, f"逆シェイプキー {new_shape_key.name} を作成しました。")
+            return {"FINISHED"}
+
+
     class KUROTORI_PT_main_panel(bpy.types.Panel):
         """アドオンの主要 UI を 3D View に表示する。"""
 
@@ -224,26 +446,27 @@ if hasattr(bpy, "types"):
         bl_category = "Kurotori"
 
         def draw(self, context: bpy.types.Context) -> None:
-            """確認用 UI とボーン連番リネーム UI を描画する。"""
+            """確認用 UI と各ツールの設定 UI を描画する。"""
             # 将来の機能追加でも配置を見失わないよう、用途ごとに UI ブロックを分ける。
             layout = self.layout
             if layout is None:
                 return
 
-            settings = _get_bone_rename_settings(context)
+            bone_rename_settings = _get_bone_rename_settings(context)
+            shape_key_reverse_settings = _get_shape_key_reverse_settings(context)
 
             layout.label(text="Addon loaded")
             layout.operator(KUROTORI_OT_show_message.bl_idname, icon="INFO")
 
             box = layout.box()
             box.label(text="Bone Rename Chain", icon="BONE_DATA")
-            if settings is None:
+            if bone_rename_settings is None:
                 box.label(text="設定を読み込めませんでした。", icon="ERROR")
                 return
 
-            box.prop(settings, "part_name")
-            box.prop(settings, "start_index")
-            box.prop(settings, "side")
+            box.prop(bone_rename_settings, "part_name")
+            box.prop(bone_rename_settings, "start_index")
+            box.prop(bone_rename_settings, "side")
             box.operator(KUROTORI_OT_rename_bone_chain.bl_idname, icon="GREASEPENCIL")
 
             align_box = layout.box()
@@ -254,12 +477,28 @@ if hasattr(bpy, "types"):
                 icon="DRIVER_DISTANCE",
             )
 
+            shape_key_box = layout.box()
+            shape_key_box.label(text="Reverse Shape Key", icon="SHAPEKEY_DATA")
+            if shape_key_reverse_settings is None:
+                shape_key_box.label(text="設定を読み込めませんでした。", icon="ERROR")
+                return
+
+            shape_key_box.prop(shape_key_reverse_settings, "source_shape_key")
+            shape_key_box.prop(shape_key_reverse_settings, "target_shape_key")
+            shape_key_box.prop(shape_key_reverse_settings, "result_shape_key_name")
+            shape_key_box.operator(
+                KUROTORI_OT_create_reverse_shape_key.bl_idname,
+                icon="ADD",
+            )
+
 
     CLASSES = (
         KUROTORI_PG_bone_rename_settings,
+        KUROTORI_PG_shape_key_reverse_settings,
         KUROTORI_OT_show_message,
         KUROTORI_OT_rename_bone_chain,
         KUROTORI_OT_align_bone_chain_linear,
+        KUROTORI_OT_create_reverse_shape_key,
         KUROTORI_PT_main_panel,
     )
 
@@ -273,12 +512,17 @@ if hasattr(bpy, "types"):
         bpy.types.WindowManager.kurotori_bone_rename_settings = bpy.props.PointerProperty(  # type: ignore[attr-defined]
             type=KUROTORI_PG_bone_rename_settings
         )
+        bpy.types.WindowManager.kurotori_shape_key_reverse_settings = bpy.props.PointerProperty(  # type: ignore[attr-defined]
+            type=KUROTORI_PG_shape_key_reverse_settings
+        )
 
 
     def unregister() -> None:
         """アドオンを Blender から解除する。"""
         if hasattr(bpy.types.WindowManager, "kurotori_bone_rename_settings"):
             del bpy.types.WindowManager.kurotori_bone_rename_settings  # type: ignore[attr-defined]
+        if hasattr(bpy.types.WindowManager, "kurotori_shape_key_reverse_settings"):
+            del bpy.types.WindowManager.kurotori_shape_key_reverse_settings  # type: ignore[attr-defined]
 
         # Blender の解除順序は登録と逆順にして、依存が増えた時の事故を避ける。
         for cls in reversed(CLASSES):
